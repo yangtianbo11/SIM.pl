@@ -3,7 +3,9 @@ from main import enterVertices, enterOrder, getEdges, lose, draw
 import numpy as np
 import matplotlib.pyplot as plt
 from ripser import ripser
+import persim
 from persim import plot_diagrams
+import pandas as pd
 import random
 import sys
 import threading
@@ -74,7 +76,10 @@ if __name__ == "__main__":
     main.num_vertices = enterVertices()
     main.order = enterOrder()
 
-    for i in range(50):
+    num_trials = 50
+    persistent = [[0 for i in range(3)] for j in range(num_trials)]
+
+    for i in range(num_trials):
         turn = 1
 
         main.player1 = np.zeros(shape=(main.num_vertices, main.num_vertices))
@@ -139,3 +144,29 @@ if __name__ == "__main__":
             plot_diagrams(dgms3, show=False)
             plt.savefig("persistent_diagrams/draws/combined_persistent_diagram" + str(i) + ".png")
             plt.close(fig3)
+
+        persistent[i][0] = dgms3
+        persistent[i][1] = dgms1
+        persistent[i][2] = dgms2
+
+    #find bottleneck distance
+    bottleneck_distances = np.zeros((3*num_trials, 3*num_trials))
+    for i in range(num_trials):
+        for j in range(3):
+            for k in range(num_trials):
+                for l in range(3):
+                    p1 = persistent[i][j][0]
+                    p2 = persistent[k][l][0]
+                    bn_distance = persim.bottleneck(p1, p2, matching=False)
+                    print(bn_distance)
+                    bottleneck_distances[3*i + j][3*k + l] = bn_distance
+
+    #persim.visuals.bottleneck_matching(persistent[0][1], persistent[2][1], matching, D, labels=['shape0', 'shape2'])
+
+    # Display the distance matrix
+    dm = plt.imshow(bottleneck_distances)
+    dm.set_cmap('hot')
+    plt.colorbar()
+    plt.savefig("bottleneck_distances/distance_matrix.png")
+
+    pd.DataFrame(bottleneck_distances).to_csv('bottleneck_distances/distance_matrix.csv')

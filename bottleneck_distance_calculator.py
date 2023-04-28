@@ -33,6 +33,6 @@ if __name__ == "__main__":
     game2, player2 = enter_game()
 
     p1 = 3*game1 + player1
-    p2 = 3*game2 + player2
+    p2 = 3*game2 + player2 + 1
 
     print(bottleneck_distances[p1][p2])

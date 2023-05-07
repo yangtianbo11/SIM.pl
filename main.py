@@ -81,12 +81,14 @@ def plotGraph(D1, D2, r):
     G1 = create_simplicial_complex(D1, r)
     G2 = create_simplicial_complex(D2, r)
 
-    plt.figure(figsize = (5, 5))
+    #plt.figure(figsize = (5, 5))
     nx.draw_networkx(G1, pos = nx.circular_layout(G1), with_labels = True, node_size = 100, edge_color = 'red')
     nx.draw_networkx(G2, pos = nx.circular_layout(G2), with_labels = True, node_size = 100, edge_color = 'blue')
-        
+
     plt.axis('equal')
-    plt.show()
+    plt.show(block=False)  # Set block=False to allow the program to continue executing
+
+    plt.pause(0.001)  # Add a small pause to refresh the figure window
 
 def enterVertices():
     """
@@ -225,6 +227,9 @@ def draw(player, edges):
             return True
     return False
 
+import os
+import datetime
+
 def takeTurn(player, r):
     """
         Player takes a turn
@@ -236,8 +241,12 @@ def takeTurn(player, r):
             the current turn of the game
     """
 
+
+    # Get the current figure and refresh it
+    fig = plt.gcf()
     #display graph
     plotGraph(player1, player2, r)
+    fig.canvas.flush_events()
 
     #get string input
     edge = input("Player " + str(player) + " place an edge: ")
@@ -278,6 +287,12 @@ def takeTurn(player, r):
         if(lose(edges, player1, r) == True):
             plotGraph(player1, player2, r)
             print("Player 2 is victorious!")
+
+            # Save the figure with a timestamp in the file name
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            filename = f"gameResults/game_{timestamp}.png"
+            fig.savefig(filename)
+            plt.show()
             return 2
         elif (draw(player, edges) == True):
             plotGraph(player1, player2, r)
@@ -291,6 +306,12 @@ def takeTurn(player, r):
         if(lose(edges, player2, r) == True):
             plotGraph(player1, player2, r)
             print("Player 1 is victorious!")
+
+            # Save the figure with a timestamp in the file name
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            filename = f"gameResults/game_{timestamp}.png"
+            fig.savefig(filename)
+            plt.show()
             return 1
         elif(draw(player, edges) == True):
             plotGraph(player1, player2, r)
@@ -309,4 +330,8 @@ if __name__ == "__main__":
     player1 = np.zeros(shape=(num_vertices, num_vertices))
     player2 = np.zeros(shape=(num_vertices, num_vertices))
 
+    # Create the gameresult folder if it doesn't exist
+    if not os.path.exists("gameResults"):
+        os.makedirs("gameResults")
+        
     takeTurn(1, turn)

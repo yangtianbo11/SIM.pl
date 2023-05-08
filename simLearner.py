@@ -192,91 +192,40 @@ class SimplicialComplexGame(gym.Env):
                     count += 1
         return None
 
-    def train_q_learning_agent(env, num_episodes, learning_rate, discount_factor, epsilon):
-        num_actions = env.num_vertices * (env.num_vertices - 1) // 2
-        q_values = np.zeros((num_actions, 2))  # Q-values for each action-state pair
-        epsilon_decay = epsilon / num_episodes
+def train_q_learning_agent(env, num_episodes, learning_rate, discount_factor, epsilon):
+    num_actions = env.num_vertices * (env.num_vertices - 1) // 2
+    q_values = np.zeros((num_actions, 2))  # Q-values for each action-state pair
+    epsilon_decay = epsilon / num_episodes
 
-        for episode in range(num_episodes):
-            state = env.reset()
-            done = False
+    for episode in range(num_episodes):
+        state = env.reset()
+        done = False
 
-            while not done:
-                action = epsilon_greedy_action(q_values, state, epsilon)
-                next_state, reward, done, _ = env.step(action)
-                q_values[action][state[2] - 1] += learning_rate * (
-                            reward + discount_factor * np.max(q_values[next_state[2] - 1]) -
-                            q_values[action][state[2] - 1])
-                state = next_state
+        while not done:
+            action = epsilon_greedy_action(q_values, state, epsilon)
+            next_state, reward, done, _ = env.step(action)
+            q_values[action][state[2] - 1] += learning_rate * (
+                        reward + discount_factor * np.max(q_values[next_state[2] - 1]) -
+                        q_values[action][state[2] - 1])
+            state = next_state
 
-            epsilon -= epsilon_decay
+        epsilon -= epsilon_decay
 
-        return q_values
+    return q_values
 
-    def epsilon_greedy_action(q_values, state, epsilon):
-        if np.random.random() < epsilon:
-            return np.random.randint(len(q_values))
-        else:
-            return np.argmax(q_values[:, state[2] - 1])
+def epsilon_greedy_action(q_values, state, epsilon):
+    if np.random.random() < epsilon:
+        return np.random.randint(len(q_values))
+    else:
+        return np.argmax(q_values[:, state[2] - 1])
 
-    def evaluate_agents(env, agent1, agent2, num_episodes):
-        agent1_wins = 0
-        agent2_wins = 0
-        draws = 0
+def evaluate_agents(env, agent1, agent2, num_episodes):
+    agent1_wins = 0
+    agent2_wins = 0
+    draws = 0
 
-        for episode in range(num_episodes):
-            state = env.reset()
-            done = False
-
-            while not done:
-                if state[2] == 1:
-                    action = agent1(state)
-                else:
-                    action = agent2(state)
-
-                state, reward, done, _ = env.step(action)
-
-            if reward == 1:
-                agent1_wins += 1
-            elif reward == -1:
-                agent2_wins += 1
-            else:
-                draws += 1
-
-        return agent1_wins, agent2_wins, draws
-
-    def random_agent(state):
-        legal_actions = state[2]._get_legal_actions()
-        return np.random.choice(legal_actions)
-
-    def q_learning_agent(q_values):
-        def agent(state):
-            legal_actions = state[2]._get_legal_actions()
-            action_values = q_values[legal_actions, state[2] - 1]
-            return legal_actions[np.argmax(action_values)]
-
-        return agent
-
-    def main():
-        num_vertices = enterVertices()
-        order = enterOrder()
-        game = SimplicialComplexGame(num_vertices, order)
-
-        q_values = train_q_learning_agent(game, num_episodes=1000, learning_rate=0.1, discount_factor=0.9, epsilon=0.1)
-        agent1 = q_learning_agent(q_values)
-        agent2 = random_agent
-
-        num_episodes = 1000
-        num_eval_episodes = 100
-        agent1_wins, agent2_wins, draws = evaluate_agents(game, agent1, agent2, num_eval_episodes)
-
-        print("Evaluation results:")
-        print(f"Agent 1 wins: {agent1_wins}")
-        print(f"Agent 2 wins: {agent2_wins}")
-        print(f"Draws: {draws}")
-
-        # Play a game between the trained agent (agent 1) and a random agent (agent 2)
-        state = game.reset()
+    for episode in range(num_episodes):
+        state = env.reset()
         done = False
 
         while not done:
@@ -285,19 +234,70 @@ class SimplicialComplexGame(gym.Env):
             else:
                 action = agent2(state)
 
-            state, reward, done, _ = game.step(action)
-            print(f"Player {state[2]} placed an edge: {action}")
-            print(f"Current state:\n{state}")
+            state, reward, done, _ = env.step(action)
 
-        rewards = game._get_rewards()
-        print("Game over")
-        if rewards[0] == rewards[1]:
-            print("The game ended in a draw.")
-        elif rewards[0] > rewards[1]:
-            print("Player 1 is victorious!")
+        if reward == 1:
+            agent1_wins += 1
+        elif reward == -1:
+            agent2_wins += 1
         else:
-            print("Player 2 is victorious!")
-        print(f"Final rewards: {rewards}")
+            draws += 1
 
-    if __name__ == "__main__":
-        main()
+    return agent1_wins, agent2_wins, draws
+
+def random_agent(state):
+    legal_actions = state[2]._get_legal_actions()
+    return np.random.choice(legal_actions)
+
+def q_learning_agent(q_values):
+    def agent(state):
+        legal_actions = state[2]._get_legal_actions()
+        action_values = q_values[legal_actions, state[2] - 1]
+        return legal_actions[np.argmax(action_values)]
+
+    return agent
+
+def main():
+    num_vertices = enterVertices()
+    order = enterOrder()
+    game = SimplicialComplexGame(num_vertices, order)
+
+    q_values = train_q_learning_agent(game, num_episodes=1000, learning_rate=0.1, discount_factor=0.9, epsilon=0.1)
+    agent1 = q_learning_agent(q_values)
+    agent2 = random_agent
+
+    num_episodes = 1000
+    num_eval_episodes = 100
+    agent1_wins, agent2_wins, draws = evaluate_agents(game, agent1, agent2, num_eval_episodes)
+
+    print("Evaluation results:")
+    print(f"Agent 1 wins: {agent1_wins}")
+    print(f"Agent 2 wins: {agent2_wins}")
+    print(f"Draws: {draws}")
+
+    # Play a game between the trained agent (agent 1) and a random agent (agent 2)
+    state = game.reset()
+    done = False
+
+    while not done:
+        if state[2] == 1:
+            action = agent1(state)
+        else:
+            action = agent2(state)
+
+        state, reward, done, _ = game.step(action)
+        print(f"Player {state[2]} placed an edge: {action}")
+        print(f"Current state:\n{state}")
+
+    rewards = game._get_rewards()
+    print("Game over")
+    if rewards[0] == rewards[1]:
+        print("The game ended in a draw.")
+    elif rewards[0] > rewards[1]:
+        print("Player 1 is victorious!")
+    else:
+        print("Player 2 is victorious!")
+    print(f"Final rewards: {rewards}")
+
+if __name__ == "__main__":
+    main()

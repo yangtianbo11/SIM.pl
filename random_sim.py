@@ -76,7 +76,7 @@ if __name__ == "__main__":
     main.num_vertices = enterVertices()
     main.order = enterOrder()
 
-    num_trials = 50
+    num_trials = 10
     persistent = [[0 for i in range(3)] for j in range(num_trials)]
 
     for i in range(num_trials):

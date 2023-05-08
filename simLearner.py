@@ -1,7 +1,48 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import gym
+from gym import spaces
 import pyspiel
+from stable_baselines3 import PPO, DQN
+from stable_baselines3.common.envs import DummyVecEnv
+
+global num_vertices
+
+def enterVertices():
+    """
+        user inputs the number of vertices in the game
+
+        Returns
+        -------
+        v : int
+            number of vertices in graph
+    """
+    vert = input("Number of Vertices: ")
+    if(vert.isnumeric() == False):
+        print("invalid input: must be a natural number")
+        return enterVertices()
+    else:
+        v = int(vert)
+        return v
+
+def enterOrder():
+    """
+        user inputs the order of the clique that triggers the lose condition
+
+        Returns
+        -------
+        o : int
+            clique order of the lose condition
+    """
+    ord = input("Order of losing clique: ")
+    if(ord.isnumeric() == False):
+        print("invalid input: must be a natural number")
+        return enterOrder()
+    o = int(ord)
+    if(o > num_vertices):
+        print("invalid input: order must be less than the number of vertices")
+        return enterOrder()
+    return o
 
 class SimplicialComplexGame(gym.Env):
     def __init__(self, num_vertices, order):
@@ -12,6 +53,8 @@ class SimplicialComplexGame(gym.Env):
         self.player1 = np.zeros(shape=(num_vertices, num_vertices))
         self.player2 = np.zeros(shape=(num_vertices, num_vertices))
         self.game = pyspiel.load_game("simplicial_complex")
+        self.action_space = spaces.Discrete(num_vertices * (num_vertices - 1) // 2)
+        self.observation_space = spaces.Box(low=0, high=2, shape=(num_vertices, num_vertices))
 
     def reset(self):
         self.turn = 1
@@ -20,13 +63,13 @@ class SimplicialComplexGame(gym.Env):
         return self._get_state()
 
     def _get_state(self):
-        return self.player1, self.player2, self.turn
+        return np.stack((self.player1, self.player2, np.full((self.num_vertices, self.num_vertices), self.turn)), axis=-1)
 
     def step(self, action):
         player = self.turn
         r = self.player1.max() + self.player2.max() + 1
 
-        v1, v2 = action
+        v1, v2 = self._action_to_edge(action)
 
         if self.player1[v1][v2] != 0 or self.player2[v1][v2] != 0:
             print("Edge already taken, please enter a different edge")
@@ -126,70 +169,127 @@ class SimplicialComplexGame(gym.Env):
         plt.grid(True)
         plt.draw()
 
-    def _get_state(self):
-        return self.player1, self.player2, self.turn
-
-    def _is_terminal(self):
-        edges1 = self._get_edges(self.player1)
-        edges2 = self._get_edges(self.player2)
-
-        if self.lose(edges1, self.player1, self.turn):
-            return True
-        if self.lose(edges2, self.player2, self.turn):
-            return True
-        if self.draw(self.player1, edges1) or self.draw(self.player2, edges2):
-            return True
-
-        return False
-
-    def _get_legal_actions(self):
-        legal_actions = []
+    def _action_to_edge(self, action):
+        v1 = 0
+        v2 = 0
+        edge_idx = action
+        count = 0
         for v1 in range(self.num_vertices):
             for v2 in range(v1 + 1, self.num_vertices):
                 if self.player1[v1][v2] == 0 and self.player2[v1][v2] == 0:
-                    legal_actions.append((v1, v2))
-        return legal_actions
-
-    def _apply_action(self, action):
-        v1, v2 = action
-        if self.turn == 1:
-            self.player1[v1][v2] = self.turn
-        else:
-            self.player2[v1][v2] = self.turn
-
-        self.turn = 3 - self.turn
-
-    def _get_rewards(self):
-        if self.lose(self._get_edges(self.player1), self.player1, self.turn):
-            return [-1, 1]
-        if self.lose(self._get_edges(self.player2), self.player2, self.turn):
-            return [1, -1]
-        if self.draw(self.player1, self._get_edges(self.player1)) or self.draw(self.player2,
-                                                                               self._get_edges(self.player2)):
-            return [0, 0]
+                    if count == edge_idx:
+                        return v1, v2
+                    count += 1
         return None
 
-        def _clone(self):
-            return SimplicialComplexGame(self.num_vertices, self.order, self.player1.copy(), self.player2.copy(),
-                                         self.turn)
+    def _edge_to_action(self, v1, v2):
+        count = 0
+        for i in range(self.num_vertices):
+            for j in range(i + 1, self.num_vertices):
+                if self.player1[i][j] == 0 and self.player2[i][j] == 0:
+                    if i == v1 and j == v2:
+                        return count
+                    count += 1
+        return None
 
-    # end of SimplicialComplexGame class
+    def train_q_learning_agent(env, num_episodes, learning_rate, discount_factor, epsilon):
+        num_actions = env.num_vertices * (env.num_vertices - 1) // 2
+        q_values = np.zeros((num_actions, 2))  # Q-values for each action-state pair
+        epsilon_decay = epsilon / num_episodes
+
+        for episode in range(num_episodes):
+            state = env.reset()
+            done = False
+
+            while not done:
+                action = epsilon_greedy_action(q_values, state, epsilon)
+                next_state, reward, done, _ = env.step(action)
+                q_values[action][state[2] - 1] += learning_rate * (
+                            reward + discount_factor * np.max(q_values[next_state[2] - 1]) -
+                            q_values[action][state[2] - 1])
+                state = next_state
+
+            epsilon -= epsilon_decay
+
+        return q_values
+
+    def epsilon_greedy_action(q_values, state, epsilon):
+        if np.random.random() < epsilon:
+            return np.random.randint(len(q_values))
+        else:
+            return np.argmax(q_values[:, state[2] - 1])
+
+    def evaluate_agents(env, agent1, agent2, num_episodes):
+        agent1_wins = 0
+        agent2_wins = 0
+        draws = 0
+
+        for episode in range(num_episodes):
+            state = env.reset()
+            done = False
+
+            while not done:
+                if state[2] == 1:
+                    action = agent1(state)
+                else:
+                    action = agent2(state)
+
+                state, reward, done, _ = env.step(action)
+
+            if reward == 1:
+                agent1_wins += 1
+            elif reward == -1:
+                agent2_wins += 1
+            else:
+                draws += 1
+
+        return agent1_wins, agent2_wins, draws
+
+    def random_agent(state):
+        legal_actions = state[2]._get_legal_actions()
+        return np.random.choice(legal_actions)
+
+    def q_learning_agent(q_values):
+        def agent(state):
+            legal_actions = state[2]._get_legal_actions()
+            action_values = q_values[legal_actions, state[2] - 1]
+            return legal_actions[np.argmax(action_values)]
+
+        return agent
 
     def main():
         num_vertices = enterVertices()
         order = enterOrder()
         game = SimplicialComplexGame(num_vertices, order)
 
-        state = game.new_initial_state()
-        while not state.is_terminal():
-            player = state.current_player()
-            legal_actions = state.legal_actions()
-            action = np.random.choice(legal_actions)
-            state.apply_action(action)
-            print(f"Player {player} placed an edge: {action}")
+        q_values = train_q_learning_agent(game, num_episodes=1000, learning_rate=0.1, discount_factor=0.9, epsilon=0.1)
+        agent1 = q_learning_agent(q_values)
+        agent2 = random_agent
+
+        num_episodes = 1000
+        num_eval_episodes = 100
+        agent1_wins, agent2_wins, draws = evaluate_agents(game, agent1, agent2, num_eval_episodes)
+
+        print("Evaluation results:")
+        print(f"Agent 1 wins: {agent1_wins}")
+        print(f"Agent 2 wins: {agent2_wins}")
+        print(f"Draws: {draws}")
+
+        # Play a game between the trained agent (agent 1) and a random agent (agent 2)
+        state = game.reset()
+        done = False
+
+        while not done:
+            if state[2] == 1:
+                action = agent1(state)
+            else:
+                action = agent2(state)
+
+            state, reward, done, _ = game.step(action)
+            print(f"Player {state[2]} placed an edge: {action}")
             print(f"Current state:\n{state}")
 
-        rewards = state.rewards()
+        rewards = game._get_rewards()
         print("Game over")
         if rewards[0] == rewards[1]:
             print("The game ended in a draw.")

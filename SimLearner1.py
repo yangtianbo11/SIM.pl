@@ -1,32 +1,35 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from gym import spaces
+import numpy as np
+import matplotlib.pyplot as plt
 import pyspiel
 
 
 def train_q_learning_agent(game, num_episodes, learning_rate, discount_factor, epsilon):
-    # Create the Q-learning agent
-    agent = pyspiel.QLearner(game, learning_rate, discount_factor, epsilon)
+    # Create a Q-learning agent
+    agent = pyspiel.TabularQPlayer(game, learning_rate, discount_factor, epsilon)
 
     # Train the agent
     for _ in range(num_episodes):
-        agent.evaluate_and_update_until_done()
+        state = game.new_initial_state()
+        while not state.is_terminal():
+            player = state.current_player()
+            info_state = state.information_state_string(player)
+            action = agent.step(player, info_state)
+            state.apply_action(action)
 
     # Get the final Q-values
-    q_values = agent.q_values()
+    q_values = agent.get_q_values()
 
     return q_values
 
 
 def q_learning_agent(q_values):
     def agent_fn(state):
-        state_str = state.observation_string()
+        info_state = state.information_state_string(state.current_player())
         legal_actions = state.legal_actions()
-        q_values_state = q_values[state_str]
-        max_q_value = np.max([q_values_state[action] for action in legal_actions])
-        best_actions = [action for action in legal_actions if q_values_state[action] == max_q_value]
-        action = np.random.choice(best_actions)
-
+        # Select the action with the highest Q-value for the given information state
+        action = max(legal_actions, key=lambda a: q_values[info_state][a])
         return action
 
     return agent_fn
@@ -34,6 +37,7 @@ def q_learning_agent(q_values):
 
 def random_agent(state):
     legal_actions = state.legal_actions()
+    # Select a random action from the legal actions
     action = np.random.choice(legal_actions)
     return action
 
@@ -45,13 +49,11 @@ def evaluate_agents(game, agent1, agent2, num_eval_episodes):
 
     for _ in range(num_eval_episodes):
         state = game.new_initial_state()
-
         while not state.is_terminal():
             if state.current_player() == 0:
                 action = agent1(state)
             else:
                 action = agent2(state)
-
             state.apply_action(action)
 
         rewards = state.rewards()

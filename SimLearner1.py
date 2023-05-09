@@ -4,23 +4,26 @@ import numpy as np
 import matplotlib.pyplot as plt
 from gym import spaces
 import pyspiel
-
+from open_spiel.python.algorithms import q_learning
 
 def train_q_learning_agent(game, num_episodes, learning_rate, discount_factor, epsilon):
-    # Create a Q-learning agent
-    agent = pyspiel.TabularQPlayer(game, learning_rate, discount_factor, epsilon)
+    num_actions = game.num_distinct_actions()
+    q_values = np.zeros((game.num_states(), num_actions))
 
-    # Train the agent
     for _ in range(num_episodes):
         state = game.new_initial_state()
         while not state.is_terminal():
             player = state.current_player()
             info_state = state.information_state_string(player)
-            action = agent.step(player, info_state)
+            legal_actions = state.legal_actions(player)
+            action = q_learning.epsilon_greedy(
+                q_values[info_state], legal_actions, epsilon)
             state.apply_action(action)
-
-    # Get the final Q-values
-    q_values = agent.get_q_values()
+            next_info_state = state.information_state_string(player)
+            reward = state.rewards()[player]
+            q_learning.update_q_value(q_values, info_state, action,
+                                      next_info_state, reward,
+                                      learning_rate, discount_factor)
 
     return q_values
 
@@ -267,7 +270,6 @@ class SimplicialComplexGame:
             ax.axis('off')
 
             plt.title("Graph")
-            plt.show()
 
 
 def main():

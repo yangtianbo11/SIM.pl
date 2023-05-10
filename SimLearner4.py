@@ -173,7 +173,7 @@ class SimplicialComplexGame:
 
     def _get_state(self):
         return np.stack((self.player1, self.player2, np.full((self.num_vertices, self.num_vertices), self.turn)),
-                        axis=-1)
+                        axis=0)
 
     def draw(self, player, edges):
         max_vertices = (self.num_vertices * (self.num_vertices - 1)) / 2

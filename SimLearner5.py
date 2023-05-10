@@ -109,7 +109,7 @@ def evaluate_agents(game, agent1, agent2, num_eval_episodes):
         done = False
 
         while not done:
-            if state[:, :, 2].any() == 1:
+            if state[2].any() == 1:
                 action = agent1(state)
             else:
                 action = agent2(state)
@@ -192,7 +192,7 @@ class SimplicialComplexGame:
 
         if self.player1[v1][v2] != 0 or self.player2[v1][v2] != 0:
             print("Edge already taken, please enter a different edge")
-            return self._get_state(), -0.001, False, {}
+            return self._get_state(), -0.1, False, {}
 
         if player == 1:
             self.player1[v1][v2] = self.r
@@ -200,7 +200,7 @@ class SimplicialComplexGame:
             if self.lose(edges, self.player1):
                 self._plot_graph(self.player1, self.player2)
                 print("Player 2 is victorious!")
-                return self._get_state(), -1, True, {}
+                return self._get_state(), -100, True, {}
 
         else:
             self.player2[v1][v2] = self.r
@@ -209,7 +209,7 @@ class SimplicialComplexGame:
             if self.lose(edges, self.player2):
                 self._plot_graph(self.player1, self.player2)
                 print("Player 1 is victorious!")
-                return self._get_state(), 1, True, {}
+                return self._get_state(), 100, True, {}
 
         if self.draw(player, edges):
             self._plot_graph(self.player1, self.player2)
@@ -296,7 +296,7 @@ def main():
     order=3
     game = SimplicialComplexGame(num_vertices, order)
 
-    num_episodes = 1000
+    num_episodes = 1000000
     num_eval_episodes = 10
 
     q_values = train_q_learning_agent(game, num_episodes=num_episodes, learning_rate=0.1, discount_factor=0.9, epsilon=0.1)
@@ -316,7 +316,7 @@ def main():
     done = False
 
     while not done:
-        if state[:, :, 2].any() == 1:
+        if state[2].any() == 1:
             action = agent1(state)
         else:
             action = agent2(state)

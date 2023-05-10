@@ -20,7 +20,7 @@ class SimplicialComplexGameWrapper(gym.Wrapper):
         super().__init__(env)
         self.metadata = {'render.modes': []}
         self.action_space = spaces.Discrete(self.env.num_valid_moves())
-        self.observation_space = spaces.Box(low=0, high=2, shape=(3, self.num_vertices, self.num_vertices))
+        self.observation_space = spaces.Box(low=0, high=2, shape=(self.env.num_vertices, self.env.num_vertices))
 
     def reset(self, **kwargs):
         obs = self.env.reset(**kwargs)
@@ -32,7 +32,14 @@ class SimplicialComplexGameWrapper(gym.Wrapper):
         return o, reward, done, info
 
     def _get_obs(self, obs):
-        adjacency_matrix = self.env._get_state()
+        #adjacency_matrix = self.env._get_state()
+        adjacency_matrix = np.zeros((self.env.num_vertices, self.env.num_vertices))
+        for i in range(self.env.num_vertices):
+            for j in range(i + 1, self.env.num_vertices):
+                if self.env._get_state()[0, i, j] != 0:
+                    adjacency_matrix[i, j] = 1
+                if self.env._get_state()[1, i, j] != 0:
+                    adjacency_matrix[i, j] = 2
         return np.reshape(adjacency_matrix, self.observation_space.shape)
 
 
@@ -171,7 +178,7 @@ class SimplicialComplexGame:
         self.player1 = np.zeros(shape=(self.num_vertices, self.num_vertices))
         self.player2 = np.zeros(shape=(self.num_vertices, self.num_vertices))
         self.action_space = spaces.Discrete(self.num_valid_moves())
-        self.observation_space = spaces.Box(low=0, high=2, shape=(3, self.num_vertices, self.num_vertices))
+        self.observation_space = spaces.Box(low=0, high=2, shape=(self.num_vertices, self.num_vertices))
         return self._get_state()
 
     def _get_state(self):

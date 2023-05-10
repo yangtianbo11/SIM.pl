@@ -19,7 +19,8 @@ class SimplicialComplexGameWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
         self.metadata = {'render.modes': []}
-        self.observation_space = spaces.Box(low=0, high=2, shape=(self.num_vertices, self.num_vertices))
+        self.action_space = spaces.Discrete(self.env.num_valid_moves())
+        self.observation_space = spaces.Box(low=0, high=2, shape=(3, self.num_vertices, self.num_vertices))
 
     def reset(self, **kwargs):
         obs = self.env.reset(**kwargs)
@@ -27,11 +28,11 @@ class SimplicialComplexGameWrapper(gym.Wrapper):
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
-        return self._get_obs(obs), reward, done, info
+        o = self._get_obs(obs)
+        return o, reward, done, info
 
     def _get_obs(self, obs):
-        adjacency_matrix = np.zeros((self.num_vertices, self.num_vertices))
-        adjacency_matrix[:obs[2].shape[0], :obs[2].shape[1]] = obs[2]
+        adjacency_matrix = self.env._get_state()
         return np.reshape(adjacency_matrix, self.observation_space.shape)
 
 
@@ -78,14 +79,14 @@ def q_learning_agent(q_network):
         #state = np.array(state).flatten()
 
         # Reshape the state to match the expected shape
-        state = np.reshape(state, (3, 5, 5))
-        print("state: ", state)
+        #state = np.reshape(state, (3, 5, 5))
+        #print("state: ", state)
         # Use the QNetwork to predict the Q-values for the given state
         q_values = q_network.predict(state)[0]
-        print("predict results: ", q_values)
+        #print("predict results: ", q_values)
         # Select the action with the highest Q-value
         action = np.argmax(q_values)
-        print("action = ", action)
+        #print("action = ", action)
         return action
 
     return agent_fn
@@ -109,7 +110,7 @@ def evaluate_agents(game, agent1, agent2, num_eval_episodes):
         done = False
 
         while not done:
-            if state[:, :, 2].any() == 1:
+            if state[2].any() == 1:
                 action = agent1(state)
             else:
                 action = agent2(state)
@@ -158,9 +159,9 @@ class SimplicialComplexGame:
         self.r = 1
         self.player1 = np.zeros(shape=(num_vertices, num_vertices))
         self.player2 = np.zeros(shape=(num_vertices, num_vertices))
-        self.action_space = spaces.Discrete(num_vertices * (num_vertices - 1) // 2)
-        print('self.action_space', self.action_space )
-        self.observation_space = spaces.Box(low=0, high=2, shape=(num_vertices, num_vertices))
+        self.action_space = spaces.Discrete(self.num_valid_moves())
+        print('self.action_space', self.action_space)
+        self.observation_space = spaces.Box(low=0, high=2, shape=(3, num_vertices, num_vertices))
         print('self.observation_space', self.observation_space)
         self.max_steps = 100  # Set the appropriate value for max_steps
 
@@ -169,11 +170,16 @@ class SimplicialComplexGame:
         self.r = 1
         self.player1 = np.zeros(shape=(self.num_vertices, self.num_vertices))
         self.player2 = np.zeros(shape=(self.num_vertices, self.num_vertices))
+        self.action_space = spaces.Discrete(self.num_valid_moves())
+        self.observation_space = spaces.Box(low=0, high=2, shape=(3, self.num_vertices, self.num_vertices))
         return self._get_state()
 
     def _get_state(self):
         return np.stack((self.player1, self.player2, np.full((self.num_vertices, self.num_vertices), self.turn)),
                         axis=0)
+
+    def _update_action_space(self):
+        self.action_space = spaces.Discrete(self.num_valid_moves())
 
     def draw(self, player, edges):
         max_vertices = (self.num_vertices * (self.num_vertices - 1)) / 2
@@ -188,11 +194,13 @@ class SimplicialComplexGame:
 
     def step(self, action):
         player = self.turn
+        print("action= ", action)
         v1, v2 = self._action_to_edge(action)
+        print("verticies: ", str(v1), ", ", str(v2))
 
         if self.player1[v1][v2] != 0 or self.player2[v1][v2] != 0:
             print("Edge already taken, please enter a different edge")
-            return self._get_state(), 0, False, {}
+            return self._get_state(), -0.001, False, {}
 
         if player == 1:
             self.player1[v1][v2] = self.r
@@ -200,7 +208,7 @@ class SimplicialComplexGame:
             if self.lose(edges, self.player1):
                 self._plot_graph(self.player1, self.player2)
                 print("Player 2 is victorious!")
-                return self._get_state(), 1, True, {}
+                return self._get_state(), -1, True, {}
 
         else:
             self.player2[v1][v2] = self.r
@@ -209,14 +217,18 @@ class SimplicialComplexGame:
             if self.lose(edges, self.player2):
                 self._plot_graph(self.player1, self.player2)
                 print("Player 1 is victorious!")
-                return self._get_state(), -1, True, {}
+                return self._get_state(), 1, True, {}
 
         if self.draw(player, edges):
             self._plot_graph(self.player1, self.player2)
             print("There are no more unfilled edges. The game has drawn.")
             return self._get_state(), 0, True, {}
 
+        self._update_action_space()
+        print('self.action_space', self.action_space)
+
         self.turn = 2 if self.turn == 1 else 1
+        print(self._get_state())
         return self._get_state(), 0, False, {}
 
     def get_edges(self, player):
@@ -228,6 +240,17 @@ class SimplicialComplexGame:
                     edges.append(e)
             edges = np.array(edges)
             return edges
+
+    def get_valid_moves(self):
+        unfilled = np.zeros(shape=(self.num_vertices, self.num_vertices))
+        for i in range(self.num_vertices):
+            for j in range(i + 1, self.num_vertices):
+                if(self.player1[i, j] == 0 and self.player2[i, j] == 0):
+                    unfilled[i, j] = 1
+        return np.argwhere(unfilled)
+
+    def num_valid_moves(self):
+        return self.get_valid_moves().shape[0]
 
     def is_clique(self, player, small_clique, vertex):
         for v in small_clique:
@@ -275,16 +298,8 @@ class SimplicialComplexGame:
         plt.title("Graph")
 
     def _action_to_edge(self, action):
-        num_edges = self.num_vertices * (self.num_vertices - 1) // 2
-        edge_idx = num_edges - 1 - action
-
-        v1 = 0
-        while edge_idx >= self.num_vertices - v1 - 1:
-            edge_idx -= self.num_vertices - v1 - 1
-            v1 += 1
-
-        v2 = v1 + edge_idx + 1
-
+        v1 = self.get_valid_moves()[action - 1, 0]
+        v2 = self.get_valid_moves()[action - 1, 1]
         return v1, v2
 
 
@@ -296,8 +311,8 @@ def main():
     order=3
     game = SimplicialComplexGame(num_vertices, order)
 
-    num_episodes = 15
-    num_eval_episodes = 5
+    num_episodes = 1000
+    num_eval_episodes = 10
 
     q_values = train_q_learning_agent(game, num_episodes=num_episodes, learning_rate=0.1, discount_factor=0.9, epsilon=0.1)
     agent1 = q_learning_agent(q_values)
@@ -316,7 +331,7 @@ def main():
     done = False
 
     while not done:
-        if state[:, :, 2].any() == 1:
+        if state[2].any() == 1:
             action = agent1(state)
         else:
             action = agent2(state)

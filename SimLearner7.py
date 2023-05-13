@@ -19,7 +19,7 @@ global myfig, myax
 
 num_vertices = 5
 order = 3
-num_episodes = 2000
+num_episodes = 5000
 num_eval_episodes = 100
 epsilon = 0.1
 
@@ -280,7 +280,7 @@ class SimplicialComplexGame:
                 plt.clf()
 
                 #leave_function(inspect.currentframe(), self._get_state())
-                return self._get_state(), 100, True, {'outcome': self.outcome}
+                return self._get_state(), -100, True, {'outcome': self.outcome}
 
         if self.draw(player, edges):
             self._plot_graph(self.player1, self.player2)
@@ -295,7 +295,7 @@ class SimplicialComplexGame:
             plt.clf()
 
             #leave_function(inspect.currentframe(), self._get_state())
-            return self._get_state(), 0, True, {'outcome': self.outcome}
+            return self._get_state(), 100, True, {'outcome': self.outcome}
 
         #leave_function(inspect.currentframe(), f'[player, v1, v2, edges, state], {[player, v1, v2, edges, self._get_state()]}')
         self.turn = 2 if self.turn == 1 else 1
@@ -491,7 +491,7 @@ def evaluate_agents(game, agent1, agent2, num_eval_episodes):
             if player == 1:
                 action = agent1(state)
             else:
-                action = agent2(state, game)
+                action = agent2(state)
 
             state, reward, done, outcome = game.step(action)
 
@@ -553,7 +553,7 @@ def main():
     q_values = train_q_learning_agent(game,  num_episodes=num_episodes, learning_starts=1, discount_factor=0.9,
                                                                                                   epsilon=epsilon)
     agent1 = q_learning_agent(q_values, epsilon)
-    agent2 = random_agent
+    agent2 = q_learning_agent(q_values, epsilon)
     # print("{num_episodes} Training results:")
     # print(f"Agent 1 wins, win_rate: ({agent1_wins}), {agent1_win_rate})")
     # print(f"Agent 2 wins, win_rate: ({agent2_wins}), {agent2_win_rate})")

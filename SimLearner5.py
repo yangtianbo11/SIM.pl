@@ -16,8 +16,8 @@ import datetime
 
 global myfig, myax
 
-num_episodes = 50
-num_eval_episodes = 10
+num_episodes = 2000
+num_eval_episodes = 1000
 epsilon = 0.1
 
 
@@ -436,10 +436,14 @@ def q_learning_agent(q_network, epsilon):
     return agent_fn
 
 
-def random_agent(state):
+def random_agent(state, game):
     # Select a random action from the action space
     #enter_function(inspect.currentframe())
     action = np.random.randint(0, state.shape[1] * (state.shape[2] - 1) // 2)
+    edge = game._action_to_edge(action)
+    if state[2][edge[0]][edge[1]] != 0:
+        return random_agent(state, game)
+
     #leave_function(inspect.currentframe())
     return action
 
@@ -460,7 +464,7 @@ def evaluate_agents(game, agent1, agent2, num_eval_episodes):
             if player == 1:
                 action = agent1(state)
             else:
-                action = agent2(state)
+                action = agent2(state, game)
 
             state, reward, done, outcome = game.step(action)
 

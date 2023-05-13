@@ -9,21 +9,21 @@ import sys
 from stable_baselines3 import DQN
 from stable_baselines3.common.vec_env import DummyVecEnv
 
-DEBUG = False
+DEBUG = True
 
 import os
 import datetime
 
 global myfig, myax
 
-num_episodes = 200
-num_eval_episodes = 100
+num_episodes = 50
+num_eval_episodes = 10
 epsilon = 0.1
 
 
 def enter_function(frame, data=None):
     if DEBUG:
-        with open('training_log.txt', 'a') as f:
+        with open('training_log1.txt', 'a') as f:
             # Redirect stdout to the file
             sys.stdout = f
             # frame = inspect.currentframe()
@@ -35,7 +35,7 @@ def enter_function(frame, data=None):
 
 def leave_function(frame, data=None):
     if DEBUG:
-        with open('training_log.txt', 'a') as f:
+        with open('training_log1.txt', 'a') as f:
             # Redirect stdout to the file
             sys.stdout = f
             # frame = inspect.currentframe()
@@ -65,7 +65,7 @@ class SimplicialComplexGameWrapper(gym.Wrapper):
         return self._get_obs(obs), reward, done, info
 
     def _get_obs(self, obs):
-        enter_function(inspect.currentframe(), obs)
+        #enter_function(inspect.currentframe(), obs)
 
         adjacency_matrix = np.zeros((self.num_vertices, self.num_vertices))
         adjacency_matrix[:obs[2].shape[0], :obs[2].shape[1]] = obs[2]
@@ -75,7 +75,7 @@ class SimplicialComplexGameWrapper(gym.Wrapper):
         #                                                                 adjacency_matrix[:obs[2].shape[0],
         #                                                                 :obs[2].shape[1]])
 
-        leave_function(inspect.currentframe(), adjacency_matrix)
+        #leave_function(inspect.currentframe(), adjacency_matrix)
         return adjacency_matrix
 
 
@@ -148,7 +148,8 @@ class SimplicialComplexGame:
         self.num_vertices = num_vertices
         self.order = order
         self.turn = 1
-        self.r = 1
+        self.r = 0
+        self.outcome = -1
         self.player1 = np.zeros(shape=(num_vertices, num_vertices))
         self.player2 = np.zeros(shape=(num_vertices, num_vertices))
         self.action_space = spaces.Discrete(num_vertices * (num_vertices - 1) // 2)
@@ -159,6 +160,9 @@ class SimplicialComplexGame:
         self.myfig = plt.figure()
         self.myax = self.myfig.add_subplot(111)
 
+    def get_outcome(self):
+        return self.outcome
+
     def _get_rewards(self):
         rewards = {
             "player_1": np.sum(self.player1),
@@ -168,10 +172,14 @@ class SimplicialComplexGame:
 
     def reset(self):
         self.turn = 1
-        self.r = 1
+        self.r = 0
+        self.outcome = -1
         self.player1 = np.zeros(shape=(self.num_vertices, self.num_vertices))
         self.player2 = np.zeros(shape=(self.num_vertices, self.num_vertices))
         return self._get_state()
+
+    def get_turn(self):
+        return self.turn
 
     def _get_state(self):
         adjacency_matrix = np.zeros((self.num_vertices, self.num_vertices))
@@ -206,16 +214,19 @@ class SimplicialComplexGame:
 
         if self.player1[v1][v2] != 0 or self.player2[v1][v2] != 0:
             # print("Edge already taken, please enter a different edge")
+            self.outcome = -1
             # leave_function(inspect.currentframe(), self._get_state())
-            return self._get_state(), -100, True, {}
+            return self._get_state(), -100, True, {'outcome': self.outcome}
 
         if player == 1:
+            self.r = self.r + 1
             self.player1[v1][v2] = self.r
             edges = self.get_edges(self.player1)
             if self.lose(edges, self.player1):
                 self._plot_graph(self.player1, self.player2)
                 self.myfig.canvas.flush_events()
                 print("Player 2 is victorious!")
+                self.outcome = 2
 
                 # Save the figure with a timestamp in the file name
                 timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -223,17 +234,17 @@ class SimplicialComplexGame:
                 self.myfig.savefig(filename)
                 plt.clf()
 
-                leave_function(inspect.currentframe(), self._get_state())
-                return self._get_state(), -100, True, {}
+                #leave_function(inspect.currentframe(), self._get_state())
+                return self._get_state(), -100, True, {'outcome': self.outcome}
 
         else:
             self.player2[v1][v2] = self.r
-            self.r = self.r + 1
             edges = self.get_edges(self.player2)
             if self.lose(edges, self.player2):
                 self._plot_graph(self.player1, self.player2)
                 self.myfig.canvas.flush_events()
                 print("Player 1 is victorious!")
+                self.outcome = 1
 
                 # Save the figure with a timestamp in the file name
                 timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -241,13 +252,14 @@ class SimplicialComplexGame:
                 self.myfig.savefig(filename)
                 plt.clf()
 
-                leave_function(inspect.currentframe(), self._get_state())
-                return self._get_state(), 100, True, {}
+                #leave_function(inspect.currentframe(), self._get_state())
+                return self._get_state(), 100, True, {'outcome': self.outcome}
 
         if self.draw(player, edges):
             self._plot_graph(self.player1, self.player2)
             self.myfig.canvas.flush_events()
             print("There are no more unfilled edges. The game has drawn.")
+            self.outcome = 0
 
             # Save the figure with a timestamp in the file name
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -255,13 +267,14 @@ class SimplicialComplexGame:
             self.myfig.savefig(filename)
             plt.clf()
 
-            leave_function(inspect.currentframe(), self._get_state())
-            return self._get_state(), 0, True, {}
+            #leave_function(inspect.currentframe(), self._get_state())
+            return self._get_state(), 0, True, {'outcome': self.outcome}
 
+        leave_function(inspect.currentframe(), f'[player, v1, v2, edges, state], {[player, v1, v2, edges, self._get_state()]}')
         self.turn = 2 if self.turn == 1 else 1
 
         # leave_function(inspect.currentframe(), self._get_state())
-        return self._get_state(), self.r - 1, False, {}
+        return self._get_state(), self.r - 1, False, {'outcome': self.outcome}
 
     def get_edges(self, player):
         edges = []
@@ -270,43 +283,45 @@ class SimplicialComplexGame:
                 if player[v1][v2] != 0:
                     e = np.array([v1, v2])
                     edges.append(e)
-            edges = np.array(edges)
-            return edges
+        edges = np.array(edges)
+        return edges
 
     def is_clique(self, player, small_clique, vertex):
         for v in small_clique:
-            if player[v, vertex] <= 0:
+            if v == vertex:
+                return False
+            if player[v, vertex] <= 0 and player[vertex, v] <= 0:
                 return False
         return True
 
     def lose(self, small_clique_set, player):
         clique_set = []
-        enter_function(inspect.currentframe(), player)
+        #enter_function(inspect.currentframe(), f'[player, small_clique_set]{[player, small_clique_set]}')
         for s in small_clique_set:
             for v in range(player.shape[0]):
-                if (self.is_clique(player, s, v) == True and np.any(s == v) == False):
+                if (self.is_clique(player, s, v) == True):
                     new_clique = np.append(s, v)
                     if (len(new_clique) == self.order):
 
-                        leave_function(inspect.currentframe())
+                        #leave_function(inspect.currentframe(), f'new_clique = {new_clique}')
                         return True
                     else:
                         clique_set.append(new_clique)
         clique_set = np.array(clique_set)
         if (np.any(clique_set) == False):
-            leave_function(inspect.currentframe())
+            #leave_function(inspect.currentframe(), f'clique_set = {clique_set}')
             return False
         else:
-            leave_function(inspect.currentframe())
+            #leave_function(inspect.currentframe(), f'clique_set = {clique_set}')
             return self.lose(clique_set, player)
 
     def render(self, mode="human"):
-        enter_function(inspect.currentframe())
+        #enter_function(inspect.currentframe())
 
         r = self.player1.max() + self.player2.max() + 1
         self._plot_graph(self.player1, self.player2, r)
 
-        leave_function(inspect.currentframe())
+        #leave_function(inspect.currentframe())
         # plt.show()
 
     def _plot_graph(self, player1, player2):
@@ -352,7 +367,7 @@ class SimplicialComplexGame:
         # plt.clf()
 
     def _action_to_edge(self, action):
-        enter_function(inspect.currentframe(), action)
+        #enter_function(inspect.currentframe(), action)
 
         num_edges = self.num_vertices * (self.num_vertices - 1) // 2
         edge_idx = num_edges - 1 - action
@@ -364,12 +379,12 @@ class SimplicialComplexGame:
 
         v2 = v1 + edge_idx + 1
 
-        leave_function(inspect.currentframe(), [v1, v2])
+        #leave_function(inspect.currentframe(), [v1, v2])
         return v1, v2
 
 
 def train_q_learning_agent(game, num_episodes, learning_starts, discount_factor, epsilon):
-    enter_function(inspect.currentframe())
+    #enter_function(inspect.currentframe())
 
     env = SimplicialComplexGameWrapper(game)
     env = DummyVecEnv([lambda: env])
@@ -383,24 +398,24 @@ def train_q_learning_agent(game, num_episodes, learning_starts, discount_factor,
     # Get the final Q-values
     q_values = agent.q_net
 
-    # Evaluate the agents and get the number of wins
-    agent1_wins, agent2_wins, _ = evaluate_agents(game, q_learning_agent(q_values, epsilon), random_agent,
-                                                  num_eval_episodes)
+    # # Evaluate the agents and get the number of wins
+    # agent1_wins, agent2_wins, _ = evaluate_agents(game, q_learning_agent(q_values, epsilon), random_agent,
+    #                                               num_eval_episodes)
+    #
+    # total_episodes = agent.num_timesteps // game.max_steps
+    #
+    # agent1_win_rate = agent1_wins / total_episodes
+    # agent2_win_rate = agent2_wins / total_episodes
 
-    total_episodes = agent.num_timesteps // game.max_steps
-
-    agent1_win_rate = agent1_wins / total_episodes
-    agent2_win_rate = agent2_wins / total_episodes
-
-    leave_function(inspect.currentframe())
-    return q_values, agent1_wins, agent2_wins, agent1_win_rate, agent2_win_rate
+    #leave_function(inspect.currentframe())
+    return q_values #, agent1_wins, agent2_wins, agent1_win_rate, agent2_win_rate
 
 
 def q_learning_agent(q_network, epsilon):
-    enter_function(inspect.currentframe(), q_network)
+    #enter_function(inspect.currentframe(), q_network)
 
     def agent_fn(state):
-        enter_function(inspect.currentframe())
+        #enter_function(inspect.currentframe())
 
         # Use the QNetwork to predict the Q-values for the given state
         q_values = q_network.predict(state)[0]
@@ -414,57 +429,63 @@ def q_learning_agent(q_network, epsilon):
             # Select the action with the highest Q-value
             action = np.argmax(q_values)
 
-        leave_function(inspect.currentframe(), q_values)
+        #leave_function(inspect.currentframe(), q_values)
         return action
 
-    leave_function(inspect.currentframe())
+    #leave_function(inspect.currentframe())
     return agent_fn
 
 
 def random_agent(state):
     # Select a random action from the action space
-    enter_function(inspect.currentframe())
+    #enter_function(inspect.currentframe())
     action = np.random.randint(0, state.shape[1] * (state.shape[2] - 1) // 2)
-    leave_function(inspect.currentframe())
+    #leave_function(inspect.currentframe())
     return action
 
 
 def evaluate_agents(game, agent1, agent2, num_eval_episodes):
-    enter_function(inspect.currentframe())
+    #enter_function(inspect.currentframe())
 
     agent1_wins = 0
     agent2_wins = 0
     draws = 0
-
-    for _ in range(num_eval_episodes):
+    total_badgames = 0
+    for gameIndex in range(num_eval_episodes):
         state = game.reset()
         done = False
 
         while not done:
-            if state[2].any() == 1:
+            player = game.get_turn()
+            if player == 1:
                 action = agent1(state)
             else:
                 action = agent2(state)
 
-            state, reward, done, _ = game.step(action)
+            state, reward, done, outcome = game.step(action)
 
-        rewards = game._get_rewards()
-        print("rewards= ", rewards)
-        if rewards["player_1"] == rewards["player_2"]:
-            draws += 1
-        elif rewards["player_1"] > rewards["player_2"]:
-            agent1_wins += 1
+
+        #outcome = game.get_outcome()
+        oc = outcome['outcome']
+        print("game result = ", oc)
+        if oc == 0:
+            draws = draws + 1
+        elif oc == 1:
+            agent1_wins = agent1_wins + 1
+        elif oc == 2:
+            agent2_wins = agent2_wins + 1
         else:
-            agent2_wins += 1
+            total_badgames = total_badgames + 1
+            print(f"{total_badgames} game {gameIndex}th is unfinished")
 
-    leave_function(inspect.currentframe())
+    #leave_function(inspect.currentframe())
     return agent1_wins, agent2_wins, draws
 
 
 def main():
     # num_vertices = enter_vertices()
     # order = enter_order(num_vertices)
-    enter_function(inspect.currentframe())
+    #enter_function(inspect.currentframe())
 
     num_vertices = 5
     order = 3
@@ -479,37 +500,42 @@ def main():
 
     game = SimplicialComplexGame(num_vertices, order)
 
-    q_values, agent1_wins, agent2_wins, agent1_win_rate, agent2_win_rate = train_q_learning_agent(game,
-                                                                                                  num_episodes=num_episodes,
-                                                                                                  learning_starts=50,
-                                                                                                  discount_factor=0.9,
+    # q_values, agent1_wins, agent2_wins, agent1_win_rate, agent2_win_rate = train_q_learning_agent(game,
+    #                                                                                               num_episodes=num_episodes,
+    #                                                                                               learning_starts=50,
+    #                                                                                               discount_factor=0.9,
+    #                                                                                               epsilon=epsilon)
+    q_values = train_q_learning_agent(game,  num_episodes=num_episodes, learning_starts=1, discount_factor=0.9,
                                                                                                   epsilon=epsilon)
     agent1 = q_learning_agent(q_values, epsilon)
     agent2 = random_agent
-    print("{num_episodes} Training results:")
-    print(f"Agent 1 wins, win_rate: ({agent1_wins}), {agent1_win_rate})")
-    print(f"Agent 2 wins, win_rate: ({agent2_wins}), {agent2_win_rate})")
+    # print("{num_episodes} Training results:")
+    # print(f"Agent 1 wins, win_rate: ({agent1_wins}), {agent1_win_rate})")
+    # print(f"Agent 2 wins, win_rate: ({agent2_wins}), {agent2_win_rate})")
 
     agent1_wins, agent2_wins, draws = evaluate_agents(game, agent1, agent2, num_eval_episodes)
 
+    totalgames = agent1_wins + agent2_wins + draws
     print(f"{num_eval_episodes} Evaluation results:")
-    print(f"Agent 1 wins: {agent1_wins}")
-    print(f"Agent 2 wins: {agent2_wins}")
-    print(f"Draws: {draws}")
+    if totalgames > 0:
+        print(f"Agent 1 wins, win_rate: ({agent1_wins}), {agent1_wins/totalgames})")
+        print(f"Agent 2 wins, win_rate: ({agent2_wins}), {agent2_wins/totalgames})")
+        print(f"Draws, draw_rate: ({draws}, {draws/totalgames})")
 
     # Play a game between the trained agent (agent 1) and a random agent (agent 2)
-    state = game.reset()
-    done = False
-
-    while not done:
-        if state[2].any() == 1:
-            action = agent1(state)
-        else:
-            action = agent2(state)
-
-        state, reward, done, _ = game.step(action)
-        print(f"Player {state[2]} placed an edge: {action}")
-        print(f"Current state:\n{state}")
+    # state = game.reset()
+    # done = False
+    #
+    # while not done:
+    #     player = game.get_turn()
+    #     if player == 1:
+    #         action = agent1(state)
+    #     else:
+    #         action = agent2(state)
+    #
+    #     state, reward, done, _ = game.step(action)
+        #print(f"Player {state[2]} placed an edge: {action}")
+        #print(f"Current state:\n{state}")
 
     print("Game over")
     # rewards = game._get_rewards()
@@ -521,7 +547,7 @@ def main():
     #     print("Player 2 is victorious!")
     # print(f"Final rewards: {rewards}")
 
-    leave_function(inspect.currentframe())
+    #leave_function(inspect.currentframe())
 
 
 if __name__ == "__main__":

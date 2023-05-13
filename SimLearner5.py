@@ -16,7 +16,7 @@ import datetime
 
 global myfig, myax
 
-num_episodes = 200
+num_episodes = 2000
 num_eval_episodes = 100
 epsilon = 0.1
 
